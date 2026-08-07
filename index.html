@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Multi-Asset Forward Tracker</title>
+<style>
+  :root{
+    --void:#070509; --crust:#16100F; --panel:#1C1413; --ember:#3A1D18;
+    --oxide:#8C3A2C; --star:#F3E7E1; --dust:#9C8A84; --dim:#6E5F5B;
+    --flare:#E8743F; --ice:#4691C9; --pos:#4FD494; --neg:#FF4D6D;
+    --mono:'Cascadia Mono','Cascadia Code',ui-monospace,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--void); color:var(--star);
+    font-family:var(--mono); font-size:15px; line-height:1.55;}
+  /* One sky behind the whole page - see planet() in the script. */
+  #sky{position:fixed; inset:0; width:100%; height:100%;
+       z-index:-2; pointer-events:none; display:block;}
+  .app{max-width:1420px; margin:0 auto; padding:0 22px 60px;}
+
+  .hero{padding:56px 0 38px;}
+  .eyebrow{display:flex; align-items:center; gap:11px; flex-wrap:wrap;
+    font-size:.72rem; letter-spacing:.21em; text-transform:uppercase;
+    color:#C2452F; margin:0 0 21px;}
+  .eyebrow .dot{flex:none; width:9px; height:9px; border-radius:50%;
+    background:var(--flare);
+    box-shadow:0 0 0 3px rgba(232,116,63,.16), 0 0 15px 2px rgba(232,116,63,.55);
+    animation:beacon 2.6s ease-out infinite;}
+  @keyframes beacon{
+    0%{box-shadow:0 0 0 3px rgba(232,116,63,.16), 0 0 15px 2px rgba(232,116,63,.55)}
+    70%{box-shadow:0 0 0 13px rgba(232,116,63,0), 0 0 15px 2px rgba(232,116,63,.28)}
+    100%{box-shadow:0 0 0 3px rgba(232,116,63,0), 0 0 15px 2px rgba(232,116,63,.55)}}
+  .wordmark{font-family:var(--mono); font-size:clamp(2rem,4.4vw,3.25rem);
+    font-weight:700; letter-spacing:-.005em; line-height:1;
+    margin:0 0 22px; color:var(--star);}
+  .wordmark span{
+    background:linear-gradient(96deg,#EE7B36 0%,#F6B084 52%,#FCDAC2 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .lede{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    font-size:1.02rem; line-height:1.6; color:#B4A49E; max-width:58ch; margin:0;}
+  .lede b{color:var(--star); font-weight:600;}
+  .lede code{font-family:var(--mono); font-size:.92em; color:var(--star);
+    font-weight:600;}
+
+  .grid{display:grid; grid-template-columns:repeat(12,1fr); gap:2px;}
+  .c12{grid-column:span 12} .c7{grid-column:span 7} .c5{grid-column:span 5}
+  .c6{grid-column:span 6} .c3{grid-column:span 3}
+  @media (max-width:1000px){
+    .c7,.c5,.c6{grid-column:span 12}
+    .c3{grid-column:span 6}
+  }
+  @media (max-width:560px){ .c3{grid-column:span 12} }
+
+  /* Panels sit at .90 alpha rather than fully opaque so the planet
+     behind them still reads as a ground. */
+  .tile{background:rgba(28,20,19,.90); border:1px solid rgba(58,29,24,.75);
+    padding:15px 17px 14px; animation:rise .7s cubic-bezier(.22,.61,.36,1) both;}
+  .tile:nth-child(2){animation-delay:.06s}
+  .tile:nth-child(3){animation-delay:.12s}
+  .tile:nth-child(4){animation-delay:.18s}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .tile.hero{border-color:#5A2419; padding:15px 17px 14px;
+    background:linear-gradient(158deg,rgba(140,58,44,.20),rgba(28,20,19,.92) 60%);}
+  .k{display:block; font-size:.61rem; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--dim); margin-bottom:9px;}
+  .v{display:block; font-size:1.95rem; font-weight:700; line-height:1;
+    letter-spacing:-.03em; font-variant-numeric:tabular-nums;}
+  .ar{font-size:.44em; vertical-align:.36em; margin-right:3px;}
+  .nt{display:block; font-size:.63rem; color:var(--dim); margin-top:9px;}
+  .pos{color:var(--pos)} .neg{color:var(--neg)} .neu{color:var(--star)}
+
+  .panel{background:rgba(28,20,19,.90); border:1px solid rgba(58,29,24,.75);
+    position:relative; display:flex; flex-direction:column;}
+  .ph{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    padding:13px 16px 0;}
+  .ph h2{margin:0; font-size:.64rem; letter-spacing:.2em; text-transform:uppercase;
+    color:var(--dust); font-weight:600;}
+  .ph span{font-size:.66rem; color:var(--dim);}
+  .stage{position:relative; padding:6px 6px 8px;}
+  .stage canvas{display:block; width:100%;}
+  .noscript{padding:14px 16px 16px; font-size:.72rem; color:var(--dim);}
+
+  .tip{position:absolute; z-index:20; pointer-events:none; opacity:0;
+    transition:opacity .12s ease; background:rgba(10,7,9,.95);
+    border:1px solid var(--oxide); border-radius:4px; padding:8px 11px;
+    font-size:.69rem; line-height:1.55; white-space:nowrap;}
+  .tip .th{color:var(--dim); font-size:.6rem; letter-spacing:.13em;
+    text-transform:uppercase; margin-bottom:5px;}
+  .tip .tr{display:flex; justify-content:space-between; gap:18px;}
+  .tip b{font-variant-numeric:tabular-nums;}
+
+  table{width:100%; border-collapse:collapse; font-size:.78rem;}
+  th,td{text-align:left; padding:9px 16px; border-bottom:1px solid rgba(58,29,24,.7);}
+  tbody tr:last-child td{border-bottom:none}
+  th{color:var(--dim); font-weight:500; font-size:.62rem; letter-spacing:.14em;
+    text-transform:uppercase;}
+  td{color:var(--dust); font-variant-numeric:tabular-nums;}
+  td:first-child{color:var(--star)}
+  tbody tr{transition:background .2s ease}
+  tbody tr:hover{background:rgba(232,116,63,.05)}
+  .st{font-weight:600; letter-spacing:.07em}
+
+  .alloc{display:flex; height:34px; gap:2px; margin:0 16px 14px;
+    border-radius:3px; overflow:hidden;}
+  .alloc div{display:flex; align-items:center; justify-content:center;
+    font-size:.69rem; font-weight:600; letter-spacing:.05em; color:var(--void);
+    white-space:nowrap; transform-origin:left;
+    animation:grow 1s cubic-bezier(.22,.61,.36,1) both;}
+  .alloc div:nth-child(2){animation-delay:.12s}
+  @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .an{font-size:.7rem; color:var(--dim); line-height:1.65; margin:0 16px 14px;}
+
+  footer{margin-top:26px; border-top:1px solid var(--ember); padding-top:18px;
+    font-size:.7rem; color:var(--dim); line-height:1.7;}
+  footer b{color:var(--dust); font-weight:600;}
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none !important; transition:none !important;}
+    .alloc div{transform:scaleX(1)} .tile{opacity:1;transform:none}
+  }
+</style></head><body>
+
+<canvas id="sky"></canvas>
+
+<div class="app">
+  <header class="hero">
+    <p class="eyebrow"><span class="dot"></span><span>Multi-asset forward tracker / day 008 / updated 2026-08-07 17:42 UTC</span></p>
+    <h1 class="wordmark">Red <span>Shift</span></h1>
+    <p class="lede">A deep-space telemetry skin for <code>tf_55_25_20</code>, running as a
+      live dashboard. The ground is iron oxide and the chrome is dim &mdash;
+      <b>the only bright things on the page are data.</b></p>
+  </header>
+
+  <div class="grid">
+    <div class="tile hero c3"><span class="k">tf_55_25_20 &mdash; this plan</span><span class="v pos"><span class="ar">&#9650;</span>3.26%</span><span class="nt">the validated allocation</span></div><div class="tile c3"><span class="k">buy-hold 55/25/20</span><span class="v pos"><span class="ar">&#9650;</span>4.94%</span><span class="nt">same weights, filter off</span></div><div class="tile c3"><span class="k">cash benchmark</span><span class="v pos"><span class="ar">&#9650;</span>0.12%</span><span class="nt">T-bill accrual</span></div><div class="tile c3"><span class="k">days tracked</span><span class="v neu">8</span><span class="nt">since 2026-07-29</span></div>
+
+    <div class="panel c12">
+      <div class="ph"><h2>Equity &amp; depth</h2>
+        <span>a sweep pass lights each close in turn &middot; depth below peak beneath</span></div>
+      <div class="stage" id="s-sweep"><div class="tip" id="t-sweep"></div></div>
+    </div>
+
+    <div class="panel c7">
+      <div class="ph"><h2>Allocation &mdash; accretion</h2>
+        <span>parked sleeves shed their weight into the cash disk</span></div>
+      <div class="stage" id="s-disk"><div class="tip" id="t-disk"></div></div>
+    </div>
+
+    <div class="panel c5">
+      <div class="ph"><h2>200-day filter &mdash; tension</h2>
+        <span>each sleeve hangs from the line by a real elastic tether</span></div>
+      <div class="stage" id="s-teth"><div class="tip" id="t-teth"></div></div>
+    </div>
+
+    <div class="panel c12">
+      <div class="ph"><h2>Return by trading day</h2>
+        <span>each session as an aurora curtain &middot; height is the move</span></div>
+      <div class="stage" id="s-aur"><div class="tip" id="t-aur"></div></div>
+    </div>
+
+    <div class="panel c6">
+      <div class="ph"><h2>200-day filter</h2><span>close against its own mean</span></div>
+      <table><thead><tr><th>asset</th><th>close / MA</th><th>gap</th><th>state</th></tr>
+        </thead><tbody><tr><td>S&amp;P 500</td><td>7745.58 / 7049.97</td><td class="pos">+9.9%</td><td class="st pos">&#9650; ABOVE</td></tr><tr><td>Bonds (IEF)</td><td>93.12 / 95.48</td><td class="neg">-2.5%</td><td class="st neg">&#9660; BELOW</td></tr><tr><td>Gold (GC=F)</td><td>4395.60 / 4478.95</td><td class="neg">-1.9%</td><td class="st neg">&#9660; BELOW</td></tr></tbody></table>
+    </div>
+
+    <div class="panel c6">
+      <div class="ph"><h2>Target allocation</h2><span>what the plan holds today</span></div>
+      <div class="alloc"><div style="flex:55;background:#E8743F">S&amp;P 500 55%</div><div style="flex:45;background:#3A1D18;color:#9C8A84">CASH 45%</div></div>
+      <p class="an">Bonds and Gold sit below the 200-day filter, so those sleeves hold cash rather than being reallocated. The plan never overweights a surviving asset &mdash; that is what keeps the drawdown profile intact.</p>
+    </div>
+  </div>
+
+  <noscript><p class="noscript">Diagrams need JavaScript, which is off. Every
+    number on this page is still correct &mdash; the tiles, the filter table and
+    the allocation bar are written into the HTML, not drawn.</p></noscript>
+
+  <footer>
+    <b>Operational tracking, not a re-test of the edge.</b> tf_55_25_20 already passed its
+    pre-registered bar against decades of history (<code>docs/multi_asset_study_report.md</code>,
+    adversarially reviewed and independently reproduced). This page confirms the
+    recommend-and-follow process works; it does not re-decide whether the strategy does.
+    Every run re-derives the whole forward window from fresh closes, so a missed run, a
+    repeated run and a first run all produce the same numbers.
+    <b>8 trading days is far too short to read anything into the gap between the curves.</b>
+  </footer>
+</div>
+
+<script>
+const D={"forward_start":"2026-07-29","updated":"2026-08-07 17:42 UTC","dates":["2026-07-29","2026-07-30","2026-07-31","2026-08-03","2026-08-04","2026-08-05","2026-08-06","2026-08-07"],"tf":[0.99959754,1.00882454,1.01283796,1.02126262,1.03158528,1.03071056,1.02978916,1.03256685],"bh":[0.99914747,1.01164817,1.01236828,1.01960937,1.03406747,1.04073424,1.03859132,1.04937556],"cash":[1.00014762,1.00029526,1.00044292,1.00059061,1.00073831,1.00088604,1.00103379,1.00118156],"states":{"spx":[true,7745.5801,7049.9694],"bond":[false,93.125,95.4766],"gold":[false,4395.6001,4478.946]},"alloc":{"spx":0.55,"bond":0.0,"gold":0.0,"cash":0.45}};
+
+const C={void:"#070509",crust:"#16100F",panel:"#1C1413",ember:"#3A1D18",oxide:"#8C3A2C",
+  star:"#F3E7E1",dust:"#9C8A84",dim:"#6E5F5B",flare:"#E8743F",ice:"#4691C9",
+  pos:"#4FD494",neg:"#FF4D6D"};
+const REDUCED=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NAME={spx:"S&P 500",bond:"Bonds (IEF)",gold:"Gold (GC=F)"};
+const WEIGHT={spx:.55,bond:.25,gold:.20};
+const KEYS=["spx","bond","gold"];
+const GAP={}; for(const k of KEYS) GAP[k]=100*(D.states[k][1]/D.states[k][2]-1);
+const M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const sd=d=>{const p=String(d).split("-");return M[+p[1]-1]+" "+p[2];};
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const arrow=x=>x>=0?"▲":"▼";
+const $=id=>document.getElementById(id);
+
+function label(g,t,x,y,col,align,size,weight){
+  g.font=(weight?weight+" ":"")+(size||11)+
+    "px 'Cascadia Mono', ui-monospace, Consolas, monospace";
+  g.fillStyle=col; g.textAlign=align||"center"; g.textBaseline="middle"; g.fillText(t,x,y);
+}
+
+/* =====================================================================
+   THE SKY - one planet, matched to the Red Shift design spec.
+   A single enormous body centred just above the top edge, with the page
+   sitting on its disc. Nothing is opaque: the light is atmospheric and
+   the stars show straight through it.
+   ===================================================================== */
+(function(){
+  const cv=$("sky"); if(!cv) return;
+  const g=cv.getContext("2d");
+  let W=0,H=0,stars=[],meteor=null,mx=0,my=0,px=0,py=0,scroll=0;
+  function build(){
+    W=innerWidth; H=innerHeight;
+    const dpr=Math.min(2,devicePixelRatio||1);
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    g.setTransform(dpr,0,0,dpr,0,0);
+    stars=[];
+    const n=Math.round(W*H/5600);
+    for(let i=0;i<n;i++){
+      const d=1+Math.floor(Math.random()*3);
+      stars.push({x:Math.random()*W,y:Math.random()*(H*1.6),d,
+        r:.35+d*.3, a:.06+d*.075, p:Math.random()*6.28, s:.5+Math.random()*1.3,
+        warm:Math.random()<.16});
+    }
+  }
+  /* Radial band, position -> alpha. Fitted to the spec by sampling
+     across the arc and converting each pixel to "added over #070509".
+     The inner edge collapses fast: by r/R 0.73 the spec is pure void. */
+  const RING=[
+    [.000,.000],[.110,.068],[.192,.201],[.288,.205],[.384,.228],
+    [.466,.150],[.548,.119],[.726,.064],[1.000,.000]
+  ];
+  /* Angular profile taken straight from the spec rather than fitted to
+     cos^n lobes, which either spiked too sharply at the upper left or
+     lost the broad lift on the right flank. Degrees are screen-space
+     (0 = +x, clockwise); values normalised to the brightest limb point. */
+  const ANG=[
+    [0,.50],[16,.55],[24,.44],[30,.38],[35,.32],[41,.36],[48,.40],[55,.36],
+    [75,.22],[90,.14],[105,.12],[122,.16],[126,.24],[133,.30],[137,.40],
+    [140,.51],[143,.63],[146,.74],[148,.86],[151,.95],[154,1.0],[156,1.0],
+    [159,.96],[161,.93],[164,.81],[180,.55],[220,.30],[270,.20],[320,.42],
+    [350,.58],[360,.62]
+  ];
+  function angular(deg){
+    deg=((deg%360)+360)%360;
+    for(let i=1;i<ANG.length;i++){
+      if(deg<=ANG[i][0]){
+        const a0=ANG[i-1][0],v0=ANG[i-1][1],a1=ANG[i][0],v1=ANG[i][1];
+        return v0+(v1-v0)*(deg-a0)/(a1-a0||1);
+      }
+    }
+    return ANG[ANG.length-1][1];
+  }
+  /* BRIGHT is the one knob. 1.0 reproduces the spec exactly, which peaks
+     at #331814 - only ~20% up from black, and too subtle to read on a
+     live page. Lifted deliberately. Set to 1.0 for a pixel-exact match. */
+  const BRIGHT=1.9;
+  let off=null,offg=null;
+  function planet(t){
+    const cx=W*.50-px*22, cy=-H*.30-py*22, R=W*.51;
+    const k=BRIGHT*(.94+.06*Math.sin(t/9000));
+    const dpr=Math.min(2,devicePixelRatio||1);
+    if(!off){ off=document.createElement("canvas"); offg=off.getContext("2d"); }
+    if(off.width!==cv.width||off.height!==cv.height){
+      off.width=cv.width; off.height=cv.height;
+    }
+    offg.setTransform(dpr,0,0,dpr,0,0);
+    offg.globalCompositeOperation="source-over";
+    offg.clearRect(0,0,W,H);
+    const ring=offg.createRadialGradient(cx,cy,R*.72,cx,cy,R*1.45);
+    for(const s of RING)
+      ring.addColorStop(s[0],"rgba(250,105,60,"+(s[1]*k).toFixed(4)+")");
+    offg.fillStyle=ring;
+    offg.beginPath(); offg.arc(cx,cy,R*1.45,0,6.2832); offg.fill();
+    if(offg.createConicGradient){
+      offg.globalCompositeOperation="destination-in";
+      const con=offg.createConicGradient(0,cx,cy);
+      for(let i=0;i<=96;i++)
+        con.addColorStop(i/96,"rgba(0,0,0,"+angular(i/96*360).toFixed(3)+")");
+      offg.fillStyle=con; offg.fillRect(0,0,W,H);
+      offg.globalCompositeOperation="source-over";
+    }
+    g.drawImage(off,0,0,W,H);
+  }
+  function starfield(t,live){
+    for(const s of stars){
+      const k=s.d;
+      const x=s.x-px*k*9;
+      const y=live?((s.y-scroll*k*.055-py*k*9)%(H*1.6)+H*1.6)%(H*1.6):s.y;
+      if(y>H+4) continue;
+      g.globalAlpha=s.a*(live?(.62+.38*Math.sin(t/900*s.s+s.p)):1);
+      g.fillStyle=s.warm?"#E8A07F":"#F3E7E1";
+      g.beginPath(); g.arc(x,y,s.r,0,6.2832); g.fill();
+    }
+    g.globalAlpha=1;
+  }
+  function still(){ px=py=0; g.clearRect(0,0,W,H); planet(9000); starfield(0,false); }
+  function frame(t){
+    px+=(mx-px)*.045; py+=(my-py)*.045;
+    g.clearRect(0,0,W,H);
+    planet(t);
+    starfield(t,true);        /* stars sit on top - visible through the band */
+    if(!meteor && Math.random()<.0014)
+      meteor={x:W*(.3+Math.random()*.6),y:-30,v:1+Math.random()*.5,life:1};
+    if(meteor){
+      meteor.x-=4.4*meteor.v; meteor.y+=2.7*meteor.v; meteor.life-=.0055;
+      const len=150*meteor.v;
+      const grd=g.createLinearGradient(meteor.x,meteor.y,
+        meteor.x+len*.85,meteor.y-len*.52);
+      grd.addColorStop(0,"rgba(243,231,225,"+Math.max(0,meteor.life*.8).toFixed(3)+")");
+      grd.addColorStop(1,"rgba(232,116,63,0)");
+      g.strokeStyle=grd; g.lineWidth=1.4;
+      g.beginPath(); g.moveTo(meteor.x,meteor.y);
+      g.lineTo(meteor.x+len*.85,meteor.y-len*.52); g.stroke();
+      if(meteor.life<=0||meteor.y>H+80) meteor=null;
+    }
+    requestAnimationFrame(frame);
+  }
+  addEventListener("resize",function(){build(); if(REDUCED) still();});
+  addEventListener("scroll",function(){scroll=scrollY;},{passive:true});
+  addEventListener("pointermove",function(e){
+    mx=e.clientX/innerWidth-.5; my=e.clientY/innerHeight-.5;});
+  build();
+  if(REDUCED) still(); else requestAnimationFrame(frame);
+})();
+
+/* ------------------------------------------------------ scene harness */
+function mount(hostId,tipId,aspect,factory){
+  const host=$(hostId), tipEl=$(tipId);
+  if(!host) return;
+  const cv=document.createElement("canvas");
+  host.insertBefore(cv,tipEl);
+  const ctx=cv.getContext("2d");
+  /* CSS owns the box via aspect-ratio; the backing store is sized from
+     the element's own laid-out dimensions. Computing the height in JS
+     instead lets the box and the drawing coordinates disagree, which
+     silently pushes anything near the bottom edge out of frame. */
+  cv.style.width="100%"; cv.style.aspectRatio=String(aspect);
+  let W=0,H=0,S=null,seen=true,last=0;
+
+  const api={
+    tip(html,x,y){
+      tipEl.innerHTML=html; tipEl.style.opacity=1;
+      const r=host.getBoundingClientRect(), t=tipEl.getBoundingClientRect();
+      let L=x-r.left+14, T=y-r.top-t.height-12;
+      if(L+t.width>r.width-6) L=x-r.left-t.width-14;
+      if(T<4) T=y-r.top+18;
+      tipEl.style.left=L+"px"; tipEl.style.top=T+"px";
+    },
+    hide(){tipEl.style.opacity=0;}
+  };
+  function size(){
+    W=cv.clientWidth; H=cv.clientHeight; if(!W||!H) return;
+    const dpr=Math.min(2,devicePixelRatio||1);
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    S=factory(W,H,api);
+    if(REDUCED){                 /* settle, then one static frame */
+      for(let i=0;i<260;i++) S.step(16,i*16);
+      ctx.clearRect(0,0,W,H); S.draw(ctx,4160);
+    }
+  }
+  new ResizeObserver(size).observe(cv);
+  new IntersectionObserver(function(e){seen=e[0].isIntersecting;},
+    {threshold:.01}).observe(host);
+  cv.addEventListener("pointermove",function(e){
+    if(!S||!S.hover) return;
+    const r=cv.getBoundingClientRect();
+    S.hover((e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height,e);
+  });
+  cv.addEventListener("pointerleave",function(){
+    api.hide(); if(S&&S.hover) S.hover(-1e5,-1e5,null);});
+  size();
+  if(REDUCED) return;
+  requestAnimationFrame(function f(t){
+    if(!last) last=t;
+    const dt=Math.min(48,t-last); last=t;
+    if(S&&seen){
+      S.step(dt,t);
+      if(S.trail){
+        /* Fade toward TRANSPARENT, not toward the void colour. Painting
+           translucent black would slowly build an opaque rectangle and
+           hide the planet behind the panel. */
+        ctx.save();
+        ctx.globalCompositeOperation="destination-out";
+        ctx.fillStyle="rgba(0,0,0,"+S.trail+")";
+        ctx.fillRect(0,0,W,H);
+        ctx.restore();
+      } else ctx.clearRect(0,0,W,H);
+      S.draw(ctx,t);
+    }
+    requestAnimationFrame(f);
+  });
+}
+
+/* =====================================================================
+   1. EQUITY & DEPTH - mechanic: a SWEEP PASS.
+   No particles. A scan line crosses on a loop and each close it touches
+   flares and holds a decaying afterglow. Nothing is ever erased - the
+   constellation and the depth area stay drawn; the sweep only adds light.
+   ===================================================================== */
+mount("s-sweep","t-sweep",4.2,function(W,H,api){
+  const L=70,R=26,T=22,GAPY=16;
+  const eqH=(H-T-34)*0.66, dpH=(H-T-34)-eqH-GAPY;
+  const n=D.tf.length;
+  const pc=s=>s.map(v=>(v-1)*100);
+  const tf=pc(D.tf), bh=pc(D.bh);
+  const lo=Math.min.apply(null,[0].concat(tf,bh))-.5;
+  const hi=Math.max.apply(null,tf.concat(bh))+.5;
+  const X=i=>n<2?L:L+(W-L-R)*i/(n-1);
+  const Ye=v=>T+eqH*(1-(v-lo)/((hi-lo)||1));
+  const dd=s=>{let p=-1e9;return s.map(v=>{p=Math.max(p,v);return 100*(v/p-1);});};
+  const dtf=dd(D.tf);
+  const dlo=Math.min(-.4,Math.min.apply(null,dtf)*1.35);
+  const dT=T+eqH+GAPY;
+  const Yd=v=>dT+dpH*(v/dlo);
+  let sweep=0, glow=new Array(n).fill(0), hov=-1;
+
+  return {
+    step(dt){
+      sweep=(sweep+dt*0.00021)%1.45;         /* pause between passes */
+      const sx=L+(W-L-R)*Math.min(1,sweep);
+      for(let i=0;i<n;i++){
+        if(sweep<=1 && Math.abs(X(i)-sx)<9) glow[i]=1;
+        glow[i]*=Math.pow(.9975,dt);
+      }
+    },
+    hover(mx,my,e){
+      hov=-1;
+      if(!e||mx<L-12||mx>W-R+12){api.hide();return;}
+      const i=n<2?0:Math.max(0,Math.min(n-1,Math.round((mx-L)/((W-L-R)/(n-1)))));
+      hov=i;
+      api.tip('<div class="th">'+sd(D.dates[i])+'</div>'+
+        '<div class="tr"><span style="color:'+C.flare+'">plan</span><b>'+
+        (tf[i]>=0?"+":"")+tf[i].toFixed(2)+'%</b></div>'+
+        '<div class="tr"><span style="color:'+C.ice+'">buy-hold</span><b>'+
+        (bh[i]>=0?"+":"")+bh[i].toFixed(2)+'%</b></div>'+
+        '<div class="tr"><span style="color:'+C.dim+'">depth</span><b>'+
+        dtf[i].toFixed(2)+'%</b></div>', e.clientX, e.clientY);
+    },
+    draw(g,t){
+      g.lineWidth=1;
+      const st=(hi-lo)>8?2:1;
+      for(let k=Math.ceil(lo/st)*st;k<=hi;k+=st){
+        g.strokeStyle=Math.abs(k)<1e-9?C.oxide:C.ember;
+        g.beginPath(); g.moveTo(L,Ye(k)); g.lineTo(W-R,Ye(k)); g.stroke();
+        label(g,(k>=0?"+":"")+k.toFixed(0)+"%",L-9,Ye(k),C.dim,"right",10);
+      }
+      g.strokeStyle=C.oxide; g.beginPath();
+      g.moveTo(L,Yd(0)); g.lineTo(W-R,Yd(0)); g.stroke();
+      label(g,"peak",L-9,Yd(0),C.dim,"right",9);
+      label(g,dlo.toFixed(1)+"%",L-9,Yd(dlo),C.dim,"right",9);
+      const dg=g.createLinearGradient(0,Yd(0),0,Yd(dlo));
+      dg.addColorStop(0,"rgba(232,116,63,.30)"); dg.addColorStop(1,"rgba(232,116,63,0)");
+      g.beginPath(); g.moveTo(X(0),Yd(0));
+      dtf.forEach((v,i)=>g.lineTo(X(i),Yd(v)));
+      g.lineTo(X(n-1),Yd(0)); g.closePath(); g.fillStyle=dg; g.fill();
+      g.strokeStyle=C.flare; g.lineWidth=1.6; g.beginPath();
+      dtf.forEach((v,i)=>i?g.lineTo(X(i),Yd(v)):g.moveTo(X(i),Yd(v))); g.stroke();
+      for(let i=1;i<n;i++){
+        const e=Math.max(glow[i],glow[i-1]);
+        g.strokeStyle=C.ice; g.globalAlpha=.5+.5*e; g.lineWidth=1.6;
+        g.beginPath(); g.moveTo(X(i-1),Ye(bh[i-1])); g.lineTo(X(i),Ye(bh[i])); g.stroke();
+        g.strokeStyle=C.flare; g.globalAlpha=.62+.38*e; g.lineWidth=2.4;
+        g.beginPath(); g.moveTo(X(i-1),Ye(tf[i-1])); g.lineTo(X(i),Ye(tf[i])); g.stroke();
+      }
+      g.globalAlpha=1;
+      if(sweep<=1){
+        const sx=L+(W-L-R)*sweep;
+        const sg=g.createLinearGradient(sx-46,0,sx+5,0);
+        sg.addColorStop(0,"rgba(232,116,63,0)");
+        sg.addColorStop(1,"rgba(232,116,63,.16)");
+        g.fillStyle=sg; g.fillRect(sx-46,T,51,eqH);
+        g.strokeStyle="rgba(243,231,225,.5)"; g.lineWidth=1;
+        g.beginPath(); g.moveTo(sx,T); g.lineTo(sx,dT+dpH); g.stroke();
+      }
+      for(let i=0;i<n;i++){
+        const e=glow[i];
+        const series=[[bh,C.ice,2.8],[tf,C.flare,3.6]];
+        for(const it of series){
+          const x=X(i), y=Ye(it[0][i]), r=it[2]+e*3.4;
+          if(e>.02){
+            const rg=g.createRadialGradient(x,y,0,x,y,r*4.5);
+            rg.addColorStop(0,(it[1]===C.flare?"rgba(232,116,63,":"rgba(70,145,201,")+
+              (e*.55).toFixed(3)+")");
+            rg.addColorStop(1,"rgba(0,0,0,0)");
+            g.fillStyle=rg; g.beginPath(); g.arc(x,y,r*4.5,0,6.284); g.fill();
+          }
+          g.fillStyle=it[1]; g.beginPath(); g.arc(x,y,r,0,6.284); g.fill();
+        }
+        if(glow[i]>.35)
+          label(g,(tf[i]>=0?"+":"")+tf[i].toFixed(2)+"%",X(i),Ye(tf[i])-16,
+            "rgba(243,231,225,"+glow[i].toFixed(2)+")","center",10,"700");
+      }
+      if(hov>=0){
+        g.save(); g.setLineDash([3,3]); g.strokeStyle=C.oxide;
+        g.beginPath(); g.moveTo(X(hov),T); g.lineTo(X(hov),dT+dpH); g.stroke(); g.restore();
+      }
+      [0,n-1].forEach(i=>label(g,sd(D.dates[i]),X(i),H-13,C.dim,i?"end":"start",10));
+      /* legend lives in the plot's empty top-left; on the date row it
+         overprinted the first date label */
+      label(g,"tf_55_25_20",L+8,T+10,C.flare,"left",10);
+      label(g,"buy-hold",L+100,T+10,C.ice,"left",10);
+      label(g,"DEPTH BELOW PEAK",W-R,dT-5,C.dim,"right",8);
+    }
+  };
+});
+
+/* =====================================================================
+   2. ALLOCATION - mechanic: an ACCRETION DISK with motion-blur trails.
+   The frame is never cleared, only dimmed, so every moving body writes a
+   real light streak. The disk is a persistent population under Keplerian
+   rotation - inner particles genuinely orbit faster - and its particle
+   count is derived from the cash weight. Parked sleeves feed it.
+   ===================================================================== */
+mount("s-disk","t-disk",1.62,function(W,H,api){
+  const cx=W/2, cy=H*.5;
+  const maxR=Math.min(W*.5-52,(H*.5-38)/.44);
+  const RINGS={spx:maxR*.5,bond:maxR*.74,gold:maxR};
+  const u=Math.max(.8,Math.min(1.5,maxR/210));
+  const coreR=(20+26*D.alloc.cash)*u;
+  const BODY={spx:13*u,bond:10*u,gold:9*u};
+  const SP={spx:.00040,bond:-.00027,gold:.00018};
+  const PH={spx:.4,bond:2.3,gold:4.4};
+  const pos=(k,t)=>({x:cx+Math.cos(t*SP[k]+PH[k])*RINGS[k],
+                     y:cy+Math.sin(t*SP[k]+PH[k])*RINGS[k]*.44});
+  const N=Math.round(150*D.alloc.cash/.45);
+  const disk=[];
+  for(let i=0;i<N;i++){
+    const r=rnd(coreR*1.35,maxR*.92);
+    disk.push({r,a:Math.random()*6.284,w:0.055/Math.pow(r,1.5),
+      s:rnd(.5,1.2),o:rnd(.18,.55)});
+  }
+  let feed=[], flash=0, hov=null;
+
+  return {
+    trail:0.17,                     /* the motion blur IS the mechanic */
+    step(dt,t){
+      for(const p of disk) p.a+=p.w*dt*22;
+      for(const k of KEYS){
+        if(D.states[k][0]) continue;
+        if(Math.random()<.10){
+          const p=pos(k,t);
+          feed.push({x:p.x,y:p.y,r:Math.hypot(p.x-cx,(p.y-cy)/.44),
+            a:Math.atan2((p.y-cy)/.44,p.x-cx),life:1});
+        }
+      }
+      for(const f of feed){
+        f.a+=0.055/Math.pow(Math.max(f.r,8),1.5)*dt*30;
+        f.r-=dt*0.045;
+        f.x=cx+Math.cos(f.a)*f.r; f.y=cy+Math.sin(f.a)*f.r*.44;
+        if(f.r<=coreR){ f.life=0; flash=Math.min(1,flash+.3); }
+      }
+      feed=feed.filter(f=>f.life>0);
+      flash*=Math.pow(.91,dt/16);
+    },
+    hover(mx,my,e){
+      hov=null; if(!e) return;
+      const t=performance.now();
+      for(const k of KEYS){const p=pos(k,t);
+        if(Math.hypot(mx-p.x,my-p.y)<BODY[k]+12){hov=k;break;}}
+      if(!hov&&Math.hypot(mx-cx,(my-cy)/.44)<coreR+10) hov="cash";
+      if(!hov){api.hide();return;}
+      if(hov==="cash")
+        api.tip('<div class="th">Cash core</div><div class="tr">'+
+          '<span style="color:'+C.dim+'">held in cash</span><b style="color:'+C.star+
+          '">'+(100*D.alloc.cash).toFixed(0)+'%</b></div>',e.clientX,e.clientY);
+      else{
+        const on=D.states[hov][0];
+        api.tip('<div class="th">'+NAME[hov]+'</div>'+
+          '<div class="tr"><span style="color:'+C.dim+'">weight</span><b>'+
+          (100*WEIGHT[hov]).toFixed(0)+'%</b></div>'+
+          '<div class="tr"><span style="color:'+C.dim+'">state</span><b style="color:'+
+          (on?C.pos:C.neg)+'">'+(on?"DEPLOYED":"PARKED")+'</b></div>',
+          e.clientX,e.clientY);
+      }
+    },
+    draw(g,t){
+      for(const k of KEYS){
+        g.save(); g.strokeStyle="rgba(58,29,24,.85)"; g.lineWidth=1;
+        g.setLineDash(D.states[k][0]?[]:[3,5]);
+        g.beginPath(); g.ellipse(cx,cy,RINGS[k],RINGS[k]*.44,0,0,6.284); g.stroke();
+        g.restore();
+      }
+      for(const p of disk){
+        const x=cx+Math.cos(p.a)*p.r, y=cy+Math.sin(p.a)*p.r*.44;
+        g.globalAlpha=p.o*(.65+.35*Math.sin(t/700*p.s+p.a));
+        g.fillStyle=C.dust; g.fillRect(x-.9,y-.9,1.8,1.8);
+      }
+      for(const f of feed){
+        g.globalAlpha=.85; g.fillStyle=C.neg;
+        g.beginPath(); g.arc(f.x,f.y,1.9,0,6.284); g.fill();
+      }
+      g.globalAlpha=1;
+      const cr=coreR*(1+flash*.05);
+      const cg=g.createRadialGradient(cx,cy,0,cx,cy,cr*2.2);
+      cg.addColorStop(0,"rgba(156,138,132,"+(.26+flash*.34).toFixed(3)+")");
+      cg.addColorStop(.5,"rgba(90,36,25,.45)");
+      cg.addColorStop(1,"rgba(7,5,9,0)");
+      g.fillStyle=cg; g.beginPath(); g.arc(cx,cy,cr*2.2,0,6.284); g.fill();
+      g.fillStyle="#2A1512"; g.strokeStyle="#5A2419"; g.lineWidth=1.4;
+      g.beginPath(); g.arc(cx,cy,cr,0,6.284); g.fill(); g.stroke();
+      label(g,(100*D.alloc.cash).toFixed(0)+"%",cx,cy-5,C.star,"center",15,"700");
+      label(g,"CASH",cx,cy+10,C.dust,"center",8);
+      for(const k of KEYS){
+        const p=pos(k,t), on=D.states[k][0], r=BODY[k];
+        if(on){
+          const bg=g.createRadialGradient(p.x,p.y,0,p.x,p.y,r*3.2);
+          bg.addColorStop(0,"rgba(232,116,63,.5)"); bg.addColorStop(1,"rgba(232,116,63,0)");
+          g.fillStyle=bg; g.beginPath(); g.arc(p.x,p.y,r*3.2,0,6.284); g.fill();
+          g.fillStyle=C.flare; g.strokeStyle=C.crust; g.lineWidth=2;
+          g.beginPath(); g.arc(p.x,p.y,r,0,6.284); g.fill(); g.stroke();
+        }else{
+          g.save(); g.setLineDash([3,3]); g.strokeStyle=C.neg; g.lineWidth=1.7;
+          g.beginPath(); g.arc(p.x,p.y,r,0,6.284); g.stroke(); g.restore();
+        }
+        label(g,NAME[k]+"  "+(100*WEIGHT[k]).toFixed(0)+"%",p.x,p.y-r-12,
+          hov===k?C.star:C.dim,"center",9);
+      }
+    }
+  };
+});
+
+/* =====================================================================
+   3. 200-DAY FILTER - mechanic: VERLET ROPE PHYSICS.
+   Each sleeve hangs off the line on a simulated elastic tether: real
+   point masses, real constraint relaxation. Nothing is emitted and
+   nothing fades. The rope's length is the gap, and it swings because it
+   is genuinely being integrated.
+   ===================================================================== */
+mount("s-teth","t-teth",1.16,function(W,H,api){
+  const hy=H*.44, reach=H*.34;
+  const gaps=KEYS.map(k=>Math.abs(GAP[k]));
+  const lim=Math.max(Math.max.apply(null,gaps)*1.3,4);
+  const Y=v=>hy-(v/lim)*reach;
+  const X={spx:W*.20,bond:W*.46,gold:W*.72};
+  const Rb={spx:12,bond:10,gold:9};
+  const PHASE={spx:0,bond:1.9,gold:3.7};
+  const SEG=14;
+  const ropes={};
+  for(const k of KEYS){
+    const y0=hy, y1=Y(GAP[k]), pts=[];
+    for(let i=0;i<=SEG;i++){
+      const y=y0+(y1-y0)*i/SEG;
+      pts.push({x:X[k],y,px:X[k],py:y});
+    }
+    ropes[k]={pts,len:Math.abs(y1-y0)/SEG,anchor:{x:X[k],y:y0},tip:{x:X[k],y:y1}};
+  }
+  let hov=null, kick={};
+
+  return {
+    step(dt,t){
+      for(const k of KEYS){
+        const rp=ropes[k], on=D.states[k][0];
+        const bob=Math.sin(t/1100+PHASE[k])*4.2;
+        const swing=Math.sin(t/1700+PHASE[k])*(on?7:4);
+        rp.tip.y=Y(GAP[k])+bob;
+        rp.tip.x=X[k]+swing+(kick[k]||0);
+        kick[k]=(kick[k]||0)*Math.pow(.94,dt/16);
+        const gr=(on?-1:1)*0.0016;
+        for(let i=1;i<rp.pts.length-1;i++){
+          const p=rp.pts[i], vx=(p.x-p.px)*.985, vy=(p.y-p.py)*.985;
+          p.px=p.x; p.py=p.y;
+          p.x+=vx; p.y+=vy+gr*dt*dt*.06;
+        }
+        rp.pts[0].x=rp.anchor.x; rp.pts[0].y=rp.anchor.y;
+        rp.pts[SEG].x=rp.tip.x; rp.pts[SEG].y=rp.tip.y;
+        for(let it=0;it<7;it++){
+          for(let i=0;i<SEG;i++){
+            const a=rp.pts[i], b=rp.pts[i+1];
+            const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1e-6;
+            const diff=(d-rp.len)/d*.5;
+            const mvA=(i===0)?0:1, mvB=(i+1===SEG)?0:1;
+            const s=(mvA+mvB)?1/(mvA+mvB)*2:0;
+            a.x+=dx*diff*mvA*s*.5; a.y+=dy*diff*mvA*s*.5;
+            b.x-=dx*diff*mvB*s*.5; b.y-=dy*diff*mvB*s*.5;
+          }
+          rp.pts[0].x=rp.anchor.x; rp.pts[0].y=rp.anchor.y;
+          rp.pts[SEG].x=rp.tip.x; rp.pts[SEG].y=rp.tip.y;
+        }
+      }
+    },
+    hover(mx,my,e){
+      hov=null; if(!e) return;
+      for(const k of KEYS){
+        const tp=ropes[k].tip;
+        if(Math.hypot(mx-tp.x,my-tp.y)<Rb[k]+13){hov=k; kick[k]=(mx-tp.x)*.9; break;}
+      }
+      if(!hov){api.hide();return;}
+      const on=D.states[hov][0];
+      api.tip('<div class="th">'+NAME[hov]+'</div>'+
+        '<div class="tr"><span style="color:'+C.dim+'">close</span><b>'+
+        D.states[hov][1].toLocaleString()+'</b></div>'+
+        '<div class="tr"><span style="color:'+C.dim+'">200-day</span><b>'+
+        D.states[hov][2].toLocaleString()+'</b></div>'+
+        '<div class="tr"><span style="color:'+C.dim+'">gap</span><b style="color:'+
+        (on?C.pos:C.neg)+'">'+arrow(GAP[hov])+" "+Math.abs(GAP[hov]).toFixed(2)+
+        '%</b></div>',e.clientX,e.clientY);
+    },
+    draw(g,t){
+      const step=lim>8?5:(lim>4?2.5:1);
+      for(let k=step;k<=lim;k+=step) for(const s of [1,-1]){
+        g.save(); g.setLineDash([2,6]); g.strokeStyle=C.ember; g.lineWidth=1;
+        g.beginPath(); g.moveTo(40,Y(k*s)); g.lineTo(W-14,Y(k*s)); g.stroke(); g.restore();
+        label(g,(s>0?"+":"−")+k+"%",34,Y(k*s),C.dim,"right",9);
+      }
+      const hg=g.createLinearGradient(0,hy-9,0,hy+9);
+      hg.addColorStop(0,"rgba(140,58,44,0)");
+      hg.addColorStop(.5,"rgba(140,58,44,.5)");
+      hg.addColorStop(1,"rgba(140,58,44,0)");
+      g.fillStyle=hg; g.fillRect(40,hy-9,W-54,18);
+      g.strokeStyle=C.oxide; g.lineWidth=1.4;
+      g.beginPath(); g.moveTo(40,hy); g.lineTo(W-14,hy); g.stroke();
+      label(g,"200-DAY LINE",W-16,hy-15,C.oxide,"right",8);
+      for(const k of KEYS){
+        const rp=ropes[k], on=D.states[k][0], r=Rb[k];
+        g.strokeStyle=on?"rgba(232,116,63,.72)":"rgba(255,77,109,.6)";
+        g.lineWidth=on?1.9:1.5; g.lineJoin="round";
+        g.beginPath();
+        rp.pts.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));
+        g.stroke();
+        g.fillStyle=C.oxide;
+        g.beginPath(); g.arc(rp.anchor.x,rp.anchor.y,2.6,0,6.284); g.fill();
+        const tp=rp.tip;
+        if(on){
+          const bg=g.createRadialGradient(tp.x,tp.y,0,tp.x,tp.y,r*3.4);
+          bg.addColorStop(0,"rgba(232,116,63,.5)"); bg.addColorStop(1,"rgba(232,116,63,0)");
+          g.fillStyle=bg; g.beginPath(); g.arc(tp.x,tp.y,r*3.4,0,6.284); g.fill();
+          g.fillStyle=C.flare; g.strokeStyle=C.crust; g.lineWidth=2;
+          g.beginPath(); g.arc(tp.x,tp.y,r,0,6.284); g.fill(); g.stroke();
+        }else{
+          g.save(); g.setLineDash([3,3]); g.strokeStyle=C.neg; g.lineWidth=1.7;
+          g.beginPath(); g.arc(tp.x,tp.y,r,0,6.284); g.stroke(); g.restore();
+        }
+        /* Labels sit BESIDE the body. Stacking them above/below breaks
+           down when one sleeve is far from the line and the others are
+           near it: the far one rides the top edge and its labels collide. */
+        const lx=tp.x+r+11;
+        label(g,NAME[k],lx,tp.y-8,hov===k?C.star:C.dust,"left",10);
+        label(g,arrow(GAP[k])+" "+Math.abs(GAP[k]).toFixed(2)+"%",lx,tp.y+10,
+          on?C.pos:C.neg,"left",13,"700");
+      }
+    }
+  };
+});
+
+/* =====================================================================
+   4. RETURN BY DAY - mechanic: AURORA CURTAINS.
+   Procedural wave rendering, drawn additively. Each session is a set of
+   vertical filaments whose phase advances continuously, so the curtain
+   shimmers without anything being spawned or destroyed. Curtain height
+   is the day's return; the reference bar underneath keeps it readable.
+   ===================================================================== */
+mount("s-aur","t-aur",6.4,function(W,H,api){
+  const L=54,R=22,T=18,B=26,n=D.tf.length;
+  const r=D.tf.map((v,i)=>100*(i===0?v-1:v/D.tf[i-1]-1));
+  const m=Math.max.apply(null,r.map(Math.abs))*1.32||.5;
+  const mid=T+(H-T-B)/2, half=(H-T-B)/2;
+  const Y=v=>mid-(v/m)*half;
+  const slot=(W-L-R)/n, cxOf=i=>L+slot*(i+.5);
+  const FIL=7;
+  let hov=-1;
+
+  return {
+    step(){},
+    hover(mx,my,e){
+      hov=-1; if(!e||mx<L||mx>W-R){api.hide();return;}
+      const i=Math.max(0,Math.min(n-1,Math.floor((mx-L)/slot)));
+      hov=i;
+      api.tip('<div class="th">'+sd(D.dates[i])+'</div><div class="tr">'+
+        '<span style="color:'+C.dim+'">plan return</span><b style="color:'+
+        (r[i]>=0?C.pos:C.neg)+'">'+arrow(r[i])+" "+Math.abs(r[i]).toFixed(2)+
+        '%</b></div>',e.clientX,e.clientY);
+    },
+    draw(g,t){
+      g.strokeStyle=C.oxide; g.lineWidth=1;
+      g.beginPath(); g.moveTo(L,mid); g.lineTo(W-R,mid); g.stroke();
+      label(g,"0%",L-9,mid,C.dim,"right",10);
+      const bw=Math.min(30,slot*.46);
+      for(let i=0;i<n;i++){
+        const up=r[i]>=0, tip=Y(r[i]), cx=cxOf(i);
+        const col=up?"79,212,148":"255,77,109";
+        g.globalAlpha=hov===i?.34:.16; g.fillStyle=up?C.pos:C.neg;
+        g.fillRect(cx-bw/2,Math.min(mid,tip),bw,Math.max(2,Math.abs(tip-mid)));
+        g.globalAlpha=1;
+        g.save(); g.globalCompositeOperation="lighter";
+        for(let f=0;f<FIL;f++){
+          const u=(f/(FIL-1))-.5;
+          const ph=t/720+i*1.3+f*.85;
+          const amp=bw*.30*(1+.5*Math.sin(ph*.7));
+          const x0=cx+u*bw*.92;
+          const grd=g.createLinearGradient(0,mid,0,tip);
+          grd.addColorStop(0,"rgba("+col+",0)");
+          grd.addColorStop(.35,"rgba("+col+",."+(hov===i?45:30)+")");
+          grd.addColorStop(1,"rgba("+col+",0)");
+          g.strokeStyle=grd; g.lineWidth=2.2-Math.abs(u)*1.5;
+          g.beginPath();
+          for(let s=0;s<=12;s++){
+            const q=s/12, y=mid+(tip-mid)*q;
+            const x=x0+Math.sin(ph+q*3.1)*amp*q;
+            s?g.lineTo(x,y):g.moveTo(x,y);
+          }
+          g.stroke();
+        }
+        g.restore();
+      }
+      if(n>1){
+        const best=r.indexOf(Math.max.apply(null,r));
+        const worst=r.indexOf(Math.min.apply(null,r));
+        label(g,"best "+arrow(r[best])+Math.abs(r[best]).toFixed(2)+"%",
+          cxOf(best),Y(r[best])-13,C.pos,"center",10);
+        label(g,"worst "+arrow(r[worst])+Math.abs(r[worst]).toFixed(2)+"%",
+          cxOf(worst),Y(r[worst])+14,C.neg,"center",10);
+      }
+      label(g,sd(D.dates[0]),L,H-11,C.dim,"left",10);
+      label(g,sd(D.dates[n-1]),W-R,H-11,C.dim,"right",10);
+    }
+  };
+});
+</script>
+</body></html>
