@@ -1,6 +1,11 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- This page names the strategy and shows live allocation, and GitHub
+     Pages is public. noindex/nofollow keeps it out of search results, so
+     it is reachable by URL but not discoverable. Not a security control -
+     anyone with the link can still read it. -->
+<meta name="robots" content="noindex,nofollow">
 <title>Multi-Asset Forward Tracker</title>
 <style>
   :root{
@@ -123,7 +128,7 @@
 
 <div class="app">
   <header class="hero">
-    <p class="eyebrow"><span class="dot"></span><span>Multi-asset forward tracker / day 008 / updated 2026-08-07 17:42 UTC</span></p>
+    <p class="eyebrow"><span class="dot"></span><span>Multi-asset forward tracker / day 008 / updated 2026-08-07 17:50 UTC</span></p>
     <h1 class="wordmark">Red <span>Shift</span></h1>
     <p class="lede">A deep-space telemetry skin for <code>tf_55_25_20</code>, running as a
       live dashboard. The ground is iron oxide and the chrome is dim &mdash;
@@ -131,7 +136,7 @@
   </header>
 
   <div class="grid">
-    <div class="tile hero c3"><span class="k">tf_55_25_20 &mdash; this plan</span><span class="v pos"><span class="ar">&#9650;</span>3.26%</span><span class="nt">the validated allocation</span></div><div class="tile c3"><span class="k">buy-hold 55/25/20</span><span class="v pos"><span class="ar">&#9650;</span>4.94%</span><span class="nt">same weights, filter off</span></div><div class="tile c3"><span class="k">cash benchmark</span><span class="v pos"><span class="ar">&#9650;</span>0.12%</span><span class="nt">T-bill accrual</span></div><div class="tile c3"><span class="k">days tracked</span><span class="v neu">8</span><span class="nt">since 2026-07-29</span></div>
+    <div class="tile hero c3"><span class="k">tf_55_25_20 &mdash; this plan</span><span class="v pos"><span class="ar">&#9650;</span>3.28%</span><span class="nt">the validated allocation</span></div><div class="tile c3"><span class="k">buy-hold 55/25/20</span><span class="v pos"><span class="ar">&#9650;</span>4.95%</span><span class="nt">same weights, filter off</span></div><div class="tile c3"><span class="k">cash benchmark</span><span class="v pos"><span class="ar">&#9650;</span>0.12%</span><span class="nt">T-bill accrual</span></div><div class="tile c3"><span class="k">days tracked</span><span class="v neu">8</span><span class="nt">since 2026-07-29</span></div>
 
     <div class="panel c12">
       <div class="ph"><h2>Equity &amp; depth</h2>
@@ -160,7 +165,7 @@
     <div class="panel c6">
       <div class="ph"><h2>200-day filter</h2><span>close against its own mean</span></div>
       <table><thead><tr><th>asset</th><th>close / MA</th><th>gap</th><th>state</th></tr>
-        </thead><tbody><tr><td>S&amp;P 500</td><td>7745.58 / 7049.97</td><td class="pos">+9.9%</td><td class="st pos">&#9650; ABOVE</td></tr><tr><td>Bonds (IEF)</td><td>93.12 / 95.48</td><td class="neg">-2.5%</td><td class="st neg">&#9660; BELOW</td></tr><tr><td>Gold (GC=F)</td><td>4395.60 / 4478.95</td><td class="neg">-1.9%</td><td class="st neg">&#9660; BELOW</td></tr></tbody></table>
+        </thead><tbody><tr><td>S&amp;P 500</td><td>7748.12 / 7049.98</td><td class="pos">+9.9%</td><td class="st pos">&#9650; ABOVE</td></tr><tr><td>Bonds (IEF)</td><td>93.11 / 95.48</td><td class="neg">-2.5%</td><td class="st neg">&#9660; BELOW</td></tr><tr><td>Gold (GC=F)</td><td>4395.60 / 4478.95</td><td class="neg">-1.9%</td><td class="st neg">&#9660; BELOW</td></tr></tbody></table>
     </div>
 
     <div class="panel c6">
@@ -186,7 +191,7 @@
 </div>
 
 <script>
-const D={"forward_start":"2026-07-29","updated":"2026-08-07 17:42 UTC","dates":["2026-07-29","2026-07-30","2026-07-31","2026-08-03","2026-08-04","2026-08-05","2026-08-06","2026-08-07"],"tf":[0.99959754,1.00882454,1.01283796,1.02126262,1.03158528,1.03071056,1.02978916,1.03256685],"bh":[0.99914747,1.01164817,1.01236828,1.01960937,1.03406747,1.04073424,1.03859132,1.04937556],"cash":[1.00014762,1.00029526,1.00044292,1.00059061,1.00073831,1.00088604,1.00103379,1.00118156],"states":{"spx":[true,7745.5801,7049.9694],"bond":[false,93.125,95.4766],"gold":[false,4395.6001,4478.946]},"alloc":{"spx":0.55,"bond":0.0,"gold":0.0,"cash":0.45}};
+const D={"forward_start":"2026-07-29","updated":"2026-08-07 17:50 UTC","dates":["2026-07-29","2026-07-30","2026-07-31","2026-08-03","2026-08-04","2026-08-05","2026-08-06","2026-08-07"],"tf":[0.99959754,1.00882454,1.01283796,1.02126262,1.03158528,1.03071056,1.02978916,1.03275779],"bh":[0.99914747,1.01164817,1.01236828,1.01960937,1.03406747,1.04073424,1.03859132,1.0495262],"cash":[1.00014762,1.00029526,1.00044292,1.00059061,1.00073831,1.00088604,1.00103379,1.00118156],"states":{"spx":[true,7748.1201,7049.9821],"bond":[false,93.11,95.4765],"gold":[false,4395.6001,4478.946]},"alloc":{"spx":0.55,"bond":0.0,"gold":0.0,"cash":0.45}};
 
 const C={void:"#070509",crust:"#16100F",panel:"#1C1413",ember:"#3A1D18",oxide:"#8C3A2C",
   star:"#F3E7E1",dust:"#9C8A84",dim:"#6E5F5B",flare:"#E8743F",ice:"#4691C9",
